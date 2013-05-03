@@ -117,6 +117,7 @@ class DatFile(object):
         with open(datpath) as datfh:
             datreader = csv.reader(datfh, delimiter=chr(20), quotechar=chr(254))
             self.header_row = datreader.next()
+            self.index_fieldname = index_header
             dictidx = self.header_row.index(index_header)
             for row in datreader:
                 d = {}
@@ -149,22 +150,39 @@ class LoanFileList(OptFile, DatFile):
     def __init__(self):
         super(LoanFileList, self).__init__()
 
-    def gather_loans(self, method='DATFIELD', loanfield=None):
-        import copy
-        self.loanindex = {}
-        if method == 'DATFIELD':  # TODO: implement other loan number methods:
-            #set comprehension to get unique loan numbers
-            loanset = {dictval[loanfield] for dictval in self.datrecords.viewvalues()}
-            #self.loanindex = {loannum: sorted([k for k, v in self.datrecords.viewitems()
-                                                  #if v[loanfield] == loannum])
-                              #for loannum in loanset}
-            tempdatrec = copy.deepcopy(self.datrecords)
-            for loan in loanset:
-                doclist = sorted([k for k, v in tempdatrec.viewitems()
-                                             if v[loanfield] == loan])
-                self.loanindex[loan] = doclist
-                for docid in doclist:
-                    del tempdatrec[docid]
+    def gather_loans_byfield(self, loanfield=None, trustfield=None):
+        #set comprehension to get unique loan numbers
+        loanset = {v[loanfield] for v in self.datrecords.viewvalues()}
+        docpairs = [(v[self.index_fieldname], v[loanfield])
+                    for v in self.datrecords.viewvalues()]
+
+        self.loanindex = self._loanmatch(loanset, docpairs)
+
+    def _loanmatch(self, loannums, docs):
+        """
+        Associate loan numbers with the list of docs in that loan.
+        Not very pythonic I know, but so much faster than the old way.
+        """
+        loannums = sorted(loannums)
+        docs = sorted(docs, key=lambda x: x[0])
+        docs = sorted(docs, key=lambda x: x[1])
+
+        currdoclist = []
+        out = {}
+        i = 0
+        for loan in loannums:
+            while True:
+                try:
+                    if loan == docs[i][1]:
+                        currdoclist.append(docs[i][0])
+                        i += 1
+                    else:
+                        out[loan] = currdoclist
+                        currdoclist = []
+                        break
+                except IndexError:  # i has fallen off the end of docs so return
+                    out[loan] = currdoclist
+                    return out
 
 
 if __name__ == "__main__":
@@ -182,8 +200,12 @@ if __name__ == "__main__":
         #print repr(line)
     #print testloan.datrecords['JPMC_DBNTC_LF0041104319']
 
-    testloan.gather_loans(loanfield="LoanNumber")
+    testloan.gather_loans_byfield(loanfield="LoanNumber")
     print 'loan gather at %d:%.1f' % divmod(time.time() - st, 60)
+    import pprint
+    pprint.pprint(testloan.loanindex['601245723'])
+    print '\n'
+    pprint.pprint(testloan.testloanindex['601245723'])
 
     #for x in testloan.loanindex['602168650']:
         #print x
