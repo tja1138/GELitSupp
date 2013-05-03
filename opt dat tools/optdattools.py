@@ -19,14 +19,9 @@ class OptRecord:
      pages- list of rows from the opt file. Each row is also a list of
                  the fields in that row, e.g. pages[0][0] is the begdoc of the
                  first page of the row.
-    loannum- loan number of the loan this doc belongs to.
-    filename- original filename of the document.
-
     """
-    def __init__(self, pages, loannum=None, filename=None):
+    def __init__(self, pages):
         self.begdoc = pages[0][0]
-        self.loannum = loannum
-        self.filename = filename
         self.pages = pages
         self.pgcount = len(pages)
 
@@ -150,8 +145,16 @@ class LoanFileList(OptFile, DatFile):
     def __init__(self):
         super(LoanFileList, self).__init__()
 
-    def gather_loans_byfield(self, loanfield=None, trustfield=None):
+    def gather_loans_byfield(self, loanfield, filenamefield=None):
+        """Merge loan, document, and image info into one dictionaty tree rooted at
+        the loan number.  This variate uses a loan id column taken from the dat file.
+
+        Args:
+            loanfield - (Required) Field heading from the dat that contains the loan number.
+            filenamefield - Original file name field from the dat, if any.
+        """
         #set comprehension to get unique loan numbers
+        self.filenamefield = filenamefield
         loanset = {v[loanfield] for v in self.datrecords.viewvalues()}
         docpairs = [(v[self.index_fieldname], v[loanfield])
                     for v in self.datrecords.viewvalues()]
@@ -159,31 +162,41 @@ class LoanFileList(OptFile, DatFile):
         self.loanindex = self._loanmatch(loanset, docpairs)
 
     def _loanmatch(self, loannums, docs):
-        """
-        Associate loan numbers with the list of docs in that loan.
+        """Associate loan numbers with the list of docs in that loan.
         Not very pythonic I know, but so much faster than the old way.
         """
         loannums = sorted(loannums)
         docs = sorted(docs, key=lambda x: x[0])
         docs = sorted(docs, key=lambda x: x[1])
 
-        currdoclist = []
+        currdocdict = {}
         out = {}
         i = 0
         for loan in loannums:
             while True:
                 try:
                     if loan == docs[i][1]:
-                        currdoclist.append(docs[i][0])
+                        currdocdict[docs[i][0]] = self._docdetails(docs[i][0],
+                                                              self.filenamefield)
                         i += 1
                     else:
-                        out[loan] = currdoclist
-                        currdoclist = []
+                        out[loan] = currdocdict
+                        currdocdict = {}
                         break
                 except IndexError:  # i has fallen off the end of docs so return
-                    out[loan] = currdoclist
+                    out[loan] = currdocdict
                     return out
 
+    def _docdetails(self, docnum, filenamef):
+        """Gather additional document details to a dict.
+        """
+        out = {}
+        if filenamef is not None:
+            out['filename'] = self.datrecords[docnum][filenamef]
+        else:
+            out['filename'] = None
+        out['images'] = self.docrecords[docnum].pages
+        return out
 
 if __name__ == "__main__":
     import time
@@ -200,12 +213,14 @@ if __name__ == "__main__":
         #print repr(line)
     #print testloan.datrecords['JPMC_DBNTC_LF0041104319']
 
-    testloan.gather_loans_byfield(loanfield="LoanNumber")
+    testloan.gather_loans_byfield(loanfield="LoanNumber", filenamefield='Document Type')
     print 'loan gather at %d:%.1f' % divmod(time.time() - st, 60)
-    import pprint
-    pprint.pprint(testloan.loanindex['601245723'])
+    import pprint as pp
+    pp.pprint(sorted(testloan.loanindex['601245723'].viewkeys()))
     print '\n'
-    pprint.pprint(testloan.testloanindex['601245723'])
+    pp.pprint(testloan.loanindex['601245723']['JPMC_DBNTC_LF0041104310']['images'])
+    print '\n', testloan.loanindex['601245723']['JPMC_DBNTC_LF0041104310']['filename']
+
 
     #for x in testloan.loanindex['602168650']:
         #print x
