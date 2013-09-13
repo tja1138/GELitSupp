@@ -38,10 +38,10 @@ def countpages(loannum, pdflist):
     totalpages = 0
     for pdfpath in pdflist:
         try:
-            dump = subprocess.check_output(["pdftk", pdfpath, "dump_data"], shell=True,
+            dump = subprocess.check_output(["pdfinfo", pdfpath], shell=True,
                                             stderr=subprocess.STDOUT)
             dumpsplit = dump.split()
-            totalpages += int(dumpsplit[dumpsplit.index('NumberOfPages:') + 1])
+            totalpages += int(dumpsplit[dumpsplit.index('Pages:') + 1])
         except subprocess.CalledProcessError:
             pass
     return (loannum, totaldocs, totalpages)
@@ -83,7 +83,7 @@ if __name__ == '__main__':
         print("Error: target directory not found\n")
         sys.exit(1)
 
-    with open('LoanPageReport.csv', 'wb') as outcsv:
+    with open('LoanPageReportI.csv', 'wb') as outcsv:
         report = csv.writer(outcsv, dialect='excel')
         report.writerow(['Loan Number', 'File Count', 'Page Count'])
         report.writerows(results)
