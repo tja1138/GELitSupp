@@ -7,10 +7,11 @@ import os
 
 class Worker(multiprocessing.Process):
 
-    def __init__(self, workq, resultq):
+    def __init__(self, workq, resultq, args):
         super(Worker, self).__init__()
         self.workq = workq
         self.resultq = resultq
+        self.args = args
 
     def run(self):
         while True:
@@ -32,25 +33,27 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Count pdf pages in loan file and produce a by loan report')
-    parser.add_argument('rootpath', action='store', dest='rootpath')
-    parser.add_argument('-max', action='store', dest='maxlen', type=int, default=200)
+    parser.add_argument('rootpath', action='store')
     parser.add_argument('-min', action='store', dest='minlen', type=int, default=5)
+    parser.add_argument('-max', action='store', dest='maxlen', type=int, default=200)
     parser.add_argument('-folder', action='store_true', default=False)
+    parser.add_argument('-p', action='store', dest='num_workers',
+                        type=int, default=multiprocessing.cpu_count())
 
     args = parser.parse_args()
 
     starttime = time.time()
     results = []
-    rootpath = sys.argv[1]
-    num_workers = 6
-    pdftable = lpc.genfilelist(rootpath)
-
+    rootpath = args.rootpath
+    num_workers = args.num_workers
+    pdftable = lpc.genfilelist(rootpath, minlen=args.minlen,
+                                maxlen=args.maxlen, foldonly=args.folder)
     ctime = '%d:%.1f' % divmod(time.time() - starttime, 60)
     print 'Dir listing complete:', ctime, '\n'
 
     workq = multiprocessing.JoinableQueue()
     resultq = multiprocessing.Queue()
-    workers = [Worker(workq, resultq) for i in xrange(num_workers)]
+    workers = [Worker(workq, resultq, args) for i in xrange(num_workers)]
     for w in workers:
         w.start()
 

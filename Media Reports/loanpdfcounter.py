@@ -4,17 +4,19 @@ from __future__ import print_function
 import sys
 import subprocess
 import os
-import re
+#import re
+import string
 from collections import defaultdict
 
 
-def genfilelist(root):
+def genfilelist(root, minlen=5, maxlen=200, foldonly=False):
     '''
     Returns a dict table of loan numbers and associated paths to pdfs for all pdfs found
-    on the path root.  Loan numbers are extracted from the file path
+    on the path root.  Loan numbers are extracted from the file path.  Maximum and minimum
+    loan number lengths to search for can me set.
     '''
-    numreg = re.compile('\\d{5,}')
     loantable = defaultdict(list)
+    splitchars = list(string.ascii_letters) + list(string.punctuation) + list(string.whitespace)
     try:
         os.chdir(root)
     except:
@@ -23,7 +25,10 @@ def genfilelist(root):
     proc = subprocess.Popen(['dir', '*.pdf', '/S', '/B'],
                             shell=True, stdout=subprocess.PIPE, bufsize=1)
     for line in iter(proc.stdout.readline, b''):
-        possiblenums = set([match.group() for match in numreg.finditer(line)])
+        if foldonly is True:
+            line = os.sep.join(line.split(os.sep)[:-1])
+        possiblenums = set([num for num in splitbyl(line, splitchars)
+                            if minlen <= len(num) <= maxlen])
         if len(possiblenums) < 1:
             continue
         #if there are multiple possible loan numbers pick the longest one.
@@ -45,6 +50,13 @@ def countpages(loannum, pdflist):
         except subprocess.CalledProcessError:
             pass
     return (loannum, totaldocs, totalpages)
+
+
+def splitbyl(txt, seps):
+    default_sep = seps[0]
+    for sep in seps[1:]:  # we skip seps[0] because that's the default seperator
+        txt = txt.replace(sep, default_sep)
+    return txt.split(default_sep)
 
 
 if __name__ == '__main__':
