@@ -25,6 +25,7 @@ def genfilelist(root, minlen=5, maxlen=200, foldonly=False):
     proc = subprocess.Popen(['dir', '*.pdf', '/S', '/B'],
                             shell=True, stdout=subprocess.PIPE, bufsize=1)
     for line in iter(proc.stdout.readline, b''):
+        fullpath = line
         if foldonly is True:
             line = os.sep.join(line.split(os.sep)[:-1])
         possiblenums = set([num for num in splitbyl(line, splitchars)
@@ -33,7 +34,7 @@ def genfilelist(root, minlen=5, maxlen=200, foldonly=False):
             continue
         #if there are multiple possible loan numbers pick the longest one.
         loannum = sorted(possiblenums, key=lambda x: len(x), reverse=True)[0]
-        loantable[loannum].append(line.strip())
+        loantable[loannum].append(fullpath.strip())
     proc.communicate()
     return loantable
 
@@ -41,6 +42,7 @@ def genfilelist(root, minlen=5, maxlen=200, foldonly=False):
 def countpages(loannum, pdflist):
     totaldocs = len(pdflist)
     totalpages = 0
+    errorfiles = []
     for pdfpath in pdflist:
         try:
             dump = subprocess.check_output(["pdfinfo", pdfpath], shell=True,
@@ -48,8 +50,8 @@ def countpages(loannum, pdflist):
             dumpsplit = dump.split()
             totalpages += int(dumpsplit[dumpsplit.index('Pages:') + 1])
         except subprocess.CalledProcessError:
-            pass
-    return (loannum, totaldocs, totalpages)
+            errorfiles.append(pdfpath)
+    return (loannum, totaldocs, totalpages, errorfiles)
 
 
 def splitbyl(txt, seps):
