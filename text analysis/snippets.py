@@ -4,6 +4,7 @@ import sys
 import string
 import itertools
 import subprocess
+import glob
 import pprint as pp
 
 
@@ -28,7 +29,7 @@ def gather_files(targetdir, filtr=''):
             globstr = os.path.join(root, filtr)
             result.extend(glob.glob(globstr))
         return result
-    
+
     if os.name is 'nt':
         return gather_windows(targetdir, filtr)
     else:
@@ -40,7 +41,7 @@ def tokenize_txt(txtpath):
         raw_tokens = infile.read().split()
     #Use translate to remove digits and punctuation
     transmap = string.maketrans(string.letters, string.letters)
-    delchars = string.digits + string.punctuation
+    delchars = string.digits + string.punctuation.replace('-', '')
     clean_tokens = [token.translate(transmap, delchars).lower() for token in raw_tokens]
     return raw_tokens, clean_tokens
 
@@ -59,7 +60,7 @@ def position_match(term_positions):
     return [pos_set for pos_set in pos_sets if contiguous(pos_set)]
 
 
-def snippet(search_text, raw_tokens, clean_tokens, width=10):
+def gen_snippet(search_text, raw_tokens, clean_tokens, width=10):
     search_text = search_text.lower().split()
     term_pos = []
     for term in search_text:
@@ -72,8 +73,39 @@ def snippet(search_text, raw_tokens, clean_tokens, width=10):
         lower = pos[0] - width if pos[0] - width > 0 else 0
         upper = pos[-1] + width + 1 if pos[-1] + width < len(raw_tokens) else len(raw_tokens)
         #print lower, upper, '\n'
-        snippets.append(raw_tokens[lower:upper])
+        snippets.append(Snippet(raw_tokens[lower:upper],
+                                search_text=search_text,
+                                width=width,
+                                term_pos=pos))
     return snippets
+
+
+class Snippet(object):
+    def __init__(self, snip, search_text='', width=10, term_pos=(0, 0, 0)):
+        self.snip = snip
+        self.search_text = search_text
+        self.width = width
+        self.search_tokens = search_text.lower().split()
+        self.term_pos = term_pos
+
+    def __str__(self):
+        return ' '.join(self.snip)
+
+    def __repr__(self):
+        return ' '.join(self.snip)
+
+    def term_highlight(self, excel_format=None):
+        """
+        Retrun the arguments to be used with xlsxwriter write_rich_string function to format
+        just the search terms in excel.
+        """
+        result = [' '.join(self.snip[:self.term_pos[0]])]
+        result.append(excel_format)
+        result.append(self.search_text)
+        result.append(' '.join(self.snip[self.term_pos[-1]+1:]))
+        return result
+
+
 
 if __name__ == '__main__':
     cnt = 0
@@ -88,7 +120,7 @@ if __name__ == '__main__':
             cnt += 1
             if cnt % 30 == 0: print cnt
             rawt, cleant = tokenize_txt(txtfile)
-            snippets = snippet('Due Diligence', rawt, cleant)
+            snippets = gen_snippet('Due Diligence', rawt, cleant)
             for snip in snippets:
                 snip = ' '.join(snip).replace('=', '')
                 if snip[0] in '=-+*/^':
