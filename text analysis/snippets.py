@@ -6,6 +6,7 @@ import itertools
 import subprocess
 import glob
 import xlsxwriter
+import codecs
 import pprint as pp
 
 
@@ -38,12 +39,13 @@ def gather_files(targetdir, filtr=''):
 
 
 def tokenize_txt(txtpath):
-    with open(txtpath) as infile:
+    with codecs.open(txtpath, encoding='utf8') as infile:
         raw_tokens = infile.read().split()
     #Use translate to remove digits and punctuation
-    transmap = string.maketrans(string.letters, string.letters)
-    delchars = string.digits + string.punctuation.replace('-', '')
-    clean_tokens = [token.translate(transmap, delchars).lower() for token in raw_tokens]
+    #transmap = string.maketrans(string.letters, string.letters)
+    #delchars = string.digits + string.punctuation.replace('-', '')
+    delmap = {ord(char): None for char in string.digits + string.punctuation.replace('-', '')}  # unicode mapping
+    clean_tokens = [token.translate(delmap).lower() for token in raw_tokens]
     return raw_tokens, clean_tokens
 
 
@@ -75,9 +77,9 @@ def gen_snippet(search_text, raw_tokens, clean_tokens, width=10):
         upper = pos[-1] + width + 1 if pos[-1] + width < len(raw_tokens) else len(raw_tokens)
         #print lower, upper, '\n'
         snippets.append(Snippet(raw_tokens[lower:upper],
-                                search_text=search_text,
+                                search_text=' '.join(search_text),
                                 width=width,
-                                term_pos=pos))
+                                term_pos=[p - lower for p in pos]))  # Realign the position for the smaller snippet
     return snippets
 
 
@@ -123,20 +125,26 @@ class Excelfile(object):
 
 if __name__ == '__main__':
     cnt = 0
+    rowcnt = 1
     inpath = sys.argv[1]
     txtfiles = gather_files(inpath)
     txtfiles = [(os.path.split(os.path.splitext(p)[0])[1], p) for p in txtfiles]
 
-    with open(sys.argv[2], 'wb') as outcsv:
-        writer = csv.writer(outcsv, quoting=csv.QUOTE_ALL)
-        writer.writerow(['DocID', 'Snippet'])
+    with Excelfile('test.xlsx') as excel:
+        ws = excel.add_worksheet()
+        bold = excel.add_format({'bold': True})
+        ws.write('A1', 'DocID')
+        ws.write('B1', 'Snippet')
         for docid, txtfile in txtfiles:
             cnt += 1
             if cnt % 30 == 0: print cnt
+            print docid
             rawt, cleant = tokenize_txt(txtfile)
             snippets = gen_snippet('Due Diligence', rawt, cleant)
             for snip in snippets:
-                snip = ' '.join(snip).replace('=', '')
-                if snip[0] in '=-+*/^':
-                    snip = "'" + snip
-                writer.writerow([docid, snip])
+                rowcnt += 1
+                cellA, cellB = 'A' + str(rowcnt), 'B' + str(rowcnt)
+                ws.write(cellA, docid)
+                ws.write_rich_string(cellB, *snip.term_highlight(bold))
+
+
