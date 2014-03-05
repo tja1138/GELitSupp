@@ -5,6 +5,7 @@ import string
 import itertools
 import subprocess
 import glob
+import xlsxwriter
 import pprint as pp
 
 
@@ -21,7 +22,7 @@ def gather_files(targetdir, filtr=''):
         proc.communicate()
         return result
 
-    def gather_linux(targetdir, filtr):
+    def gather_linux(targetdir, filtr=None):
         result = []
         if not filtr:
             filtr = '*.*'
@@ -105,6 +106,19 @@ class Snippet(object):
         result.append(' '.join(self.snip[self.term_pos[-1]+1:]))
         return result
 
+class Excelfile(object):
+    """
+    Implements a context manager for xlsxwriter excel files.
+    """
+    def __init__(self, filename='excel.xlsx'):
+        self.filename = filename
+
+    def __enter__(self):
+        self.workbook = xlsxwriter.Workbook(self.filename)
+        return self.workbook
+
+    def __exit__(self, type, value, traceback):
+        self.workbook.close()
 
 
 if __name__ == '__main__':
